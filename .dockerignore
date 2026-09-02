@@ -1,0 +1,12 @@
+.git
+.codex
+.agents
+data
+.airipress
+bin
+web/node_modules
+web/dist
+**/__pycache__
+*.db
+config/config.yaml
+config/secrets

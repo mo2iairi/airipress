@@ -1,0 +1,162 @@
+openapi: 3.0.3
+info: {title: airipress API, version: 0.1.0}
+servers: [{url: http://localhost:8787}]
+security: [{sessionCookie: []}]
+paths:
+  /api/v1/health:
+    get: {security: [], summary: Health check, responses: {'200': {description: Healthy}}}
+  /api/v1/auth/login:
+    post:
+      security: []
+      summary: Create an administrator session
+      parameters: [{$ref: '#/components/parameters/RequestMarker'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/LoginInput'}}}}
+      responses:
+        '204':
+          description: Authenticated
+          headers:
+            Set-Cookie: {schema: {type: string}, description: HttpOnly SameSite Strict session cookie}
+        '403': {description: Missing request marker or disallowed Origin}
+        '401': {description: Invalid credentials}
+        '429': {description: Too many login attempts}
+  /api/v1/auth/session:
+    get:
+      security: [{sessionCookie: []}]
+      summary: Return the current administrator session
+      responses: {'200': {description: Authenticated, content: {application/json: {schema: {$ref: '#/components/schemas/Session'}}}}, '401': {description: Not authenticated}}
+    delete:
+      security: [{sessionCookie: []}]
+      summary: End the current administrator session
+      parameters: [{$ref: '#/components/parameters/RequestMarker'}]
+      responses: {'204': {description: Signed out}}
+  /api/v1/workspaces:
+    get: {summary: List workspaces, responses: {'200': {description: OK, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/Workspace'}}}}}}}
+    post: {summary: Create workspace, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/WorkspaceInput'}}}}, responses: {'201': {description: Created, content: {application/json: {schema: {$ref: '#/components/schemas/Workspace'}}}}}}
+  /api/v1/workspaces/{workspaceId}:
+    parameters: [{name: workspaceId, in: path, required: true, schema: {type: string}}]
+    get: {summary: Get workspace, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Workspace'}}}}}}
+    patch: {summary: Update workspace, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/WorkspacePatch'}}}}, responses: {'200': {description: Updated}}}
+    delete: {summary: Delete workspace, responses: {'204': {description: Deleted}}}
+  /api/v1/models:
+    get: {summary: List model configs, responses: {'200': {description: OK, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/Model'}}}}}}}
+    post: {summary: Create model config, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ModelInput'}}}}, responses: {'201': {description: Created, content: {application/json: {schema: {$ref: '#/components/schemas/Model'}}}}}}
+  /api/v1/models/discover:
+    post: {summary: Discover models from a provider, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ModelDiscoveryInput'}}}}, responses: {'200': {description: Available models, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/DiscoveredModel'}}}}}, '400': {description: Invalid request}, '502': {description: Provider request failed}}}
+  /api/v1/models/{modelId}:
+    parameters: [{name: modelId, in: path, required: true, schema: {type: string}}]
+    get: {summary: Get model config, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Model'}}}}}}
+    patch: {summary: Update model config, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ModelPatch'}}}}, responses: {'200': {description: Updated, content: {application/json: {schema: {$ref: '#/components/schemas/Model'}}}}}}
+    delete: {summary: Delete model config, responses: {'204': {description: Deleted}}}
+  /api/v1/assets:
+    post: {summary: Upload a deduplicated file object without attaching it, requestBody: {required: true, content: {multipart/form-data: {schema: {type: object, required: [file], properties: {file: {type: string, format: binary}}}}}}, responses: {'201': {description: Created, content: {application/json: {schema: {$ref: '#/components/schemas/Asset'}}}}}}
+  /api/v1/files:
+    get: {summary: List global file objects and their workspace reference counts, responses: {'200': {description: OK, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/Asset'}}}}}}}
+    post: {summary: Upload a deduplicated global file object without attaching it, requestBody: {required: true, content: {multipart/form-data: {schema: {type: object, required: [file], properties: {file: {type: string, format: binary}}}}}}, responses: {'201': {description: Created, content: {application/json: {schema: {$ref: '#/components/schemas/Asset'}}}}}}
+  /api/v1/themes:
+    get: {summary: List built-in and configured static-site themes, responses: {'200': {description: Theme catalog, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/SiteTheme'}}}}}}}
+  /api/v1/themes/{themeId}/install:
+    parameters: [{name: themeId, in: path, required: true, schema: {type: string}}]
+    post: {summary: Download a configured GitHub theme after validating its airipress theme contract, responses: {'200': {description: Installed, content: {application/json: {schema: {$ref: '#/components/schemas/SiteTheme'}}}}, '404': {description: Theme is not in the configured catalog}}}
+  /api/v1/themes/import:
+    post: {summary: Import and install a theme from a GitHub HTTPS Git URL; a connected account is used when available for private repositories, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ThemeImportInput'}}}}, responses: {'201': {description: Imported theme, content: {application/json: {schema: {$ref: '#/components/schemas/SiteTheme'}}}}}
+  /api/v1/workspaces/{workspaceId}/sources:
+    parameters: [{name: workspaceId, in: path, required: true, schema: {type: string}}]
+    get: {summary: List workspace sources, responses: {'200': {description: OK, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/Source'}}}}}}}
+    post: {summary: Upload and attach a source or attach an existing asset, requestBody: {required: true, content: {multipart/form-data: {schema: {type: object, required: [file], properties: {file: {type: string, format: binary}}}}, application/json: {schema: {$ref: '#/components/schemas/SourceReferenceInput'}}}}, responses: {'201': {description: Created, content: {application/json: {schema: {$ref: '#/components/schemas/Source'}}}}}}
+  /api/v1/workspaces/{workspaceId}/sources/{sourceId}:
+    parameters: [{name: workspaceId, in: path, required: true, schema: {type: string}}, {name: sourceId, in: path, required: true, schema: {type: string}}]
+    delete: {summary: Remove source, responses: {'204': {description: Deleted}}}
+  /api/v1/workspaces/{workspaceId}/messages:
+    parameters: [{name: workspaceId, in: path, required: true, schema: {type: string}}]
+    get: {summary: List messages, responses: {'200': {description: OK, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/Message'}}}}}}}
+    post: {summary: Send message through the selected model and return updated history, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/MessageInput'}}}}, responses: {'201': {description: Assistant response, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/Message'}}}}}}}
+  /api/v1/workspaces/{workspaceId}/chats:
+    parameters: [{name: workspaceId, in: path, required: true, schema: {type: string}}]
+    get: {summary: List chats in a workspace, responses: {'200': {description: OK, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/Chat'}}}}}}}
+    post: {summary: Create a chat, requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/ChatInput'}}}}, responses: {'201': {description: Created, content: {application/json: {schema: {$ref: '#/components/schemas/Chat'}}}}}}
+  /api/v1/workspaces/{workspaceId}/chats/{chatId}:
+    parameters: [{name: workspaceId, in: path, required: true, schema: {type: string}}, {name: chatId, in: path, required: true, schema: {type: string}}]
+    patch: {summary: Rename a chat, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ChatInput'}}}}, responses: {'200': {description: Updated}}}
+    delete: {summary: Delete a chat and its messages, responses: {'204': {description: Deleted}}}
+  /api/v1/workspaces/{workspaceId}/chats/{chatId}/messages:
+    parameters: [{name: workspaceId, in: path, required: true, schema: {type: string}}, {name: chatId, in: path, required: true, schema: {type: string}}]
+    get: {summary: List messages in one chat, responses: {'200': {description: OK, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/Message'}}}}}}}
+    post: {summary: Stream a new assistant response as server-sent events, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/MessageInput'}}}}, responses: {'200': {description: SSE stream, content: {text/event-stream: {schema: {type: string}}}}}}
+  /api/v1/workspaces/{workspaceId}/chats/{chatId}/messages/{messageId}:
+    parameters: [{name: workspaceId, in: path, required: true, schema: {type: string}}, {name: chatId, in: path, required: true, schema: {type: string}}, {name: messageId, in: path, required: true, schema: {type: string}}]
+    patch: {summary: Edit a user message, truncate later messages, and stream a replacement, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/MessageInput'}}}}, responses: {'200': {description: SSE stream, content: {text/event-stream: {schema: {type: string}}}}}}
+  /api/v1/workspaces/{workspaceId}/chats/{chatId}/messages/{messageId}/retry:
+    post: {summary: Retry from a message and stream a replacement, responses: {'200': {description: SSE stream, content: {text/event-stream: {schema: {type: string}}}}}}
+  /api/v1/workspaces/{workspaceId}/chats/{chatId}/branch:
+    post: {summary: Copy the chat prefix through a message into a new chat, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ChatBranchInput'}}}}, responses: {'201': {description: Created chat, content: {application/json: {schema: {$ref: '#/components/schemas/Chat'}}}}}}
+  /api/v1/workspaces/{workspaceId}/studio/mindmap:
+    parameters: [{name: workspaceId, in: path, required: true, schema: {type: string}}]
+    get: {summary: Get latest mindmap, responses: {'200': {description: Mindmap JSON, content: {application/json: {schema: {$ref: '#/components/schemas/Mindmap'}}}}}}
+    post: {summary: Generate mindmap from workspace sources, responses: {'201': {description: Mindmap JSON, content: {application/json: {schema: {$ref: '#/components/schemas/Mindmap'}}}}}}
+  /api/v1/workspaces/{workspaceId}/publish:
+    parameters: [{name: workspaceId, in: path, required: true, schema: {type: string}}]
+    post: {summary: Queue site publication, requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/PublishInput'}}}}, responses: {'202': {description: Queued, content: {application/json: {schema: {$ref: '#/components/schemas/Job'}}}}}}
+  /api/v1/github/start:
+    get: {summary: Start GitHub OAuth authorization, responses: {'302': {description: Redirect to GitHub}, '503': {description: GitHub OAuth is not configured}}}
+  /api/v1/github/callback:
+    get: {security: [], summary: GitHub OAuth callback, responses: {'302': {description: Return to airipress}, '400': {description: Invalid OAuth state}, '502': {description: GitHub exchange failed}}}
+  /api/v1/github/status:
+    get: {summary: Get connected GitHub account status, responses: {'200': {description: Status}}}
+  /api/v1/github/disconnect:
+    delete: {summary: Disconnect the GitHub account, responses: {'204': {description: Disconnected}}}
+  /api/v1/github/repos:
+    get: {summary: List repositories owned by the connected GitHub account, responses: {'200': {description: Repositories, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/GitHubRepo'}}}}}, '409': {description: GitHub account is not connected}}}
+    post: {summary: Create a repository for the connected GitHub account, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/GitHubRepoInput'}}}}, responses: {'201': {description: Created, content: {application/json: {schema: {$ref: '#/components/schemas/GitHubRepo'}}}}, '403': {description: Owner does not match connected account}}}
+  /api/v1/github/repos/{owner}/{repo}/branches:
+    get: {summary: List branches for a repository owned by the connected GitHub account, parameters: [{name: owner, in: path, required: true, schema: {type: string}}, {name: repo, in: path, required: true, schema: {type: string}}], responses: {'200': {description: Branches}}}
+  /api/v1/github/repos/{repo}/branches:
+    get: {summary: List branches for a repository in the connected account, parameters: [{name: repo, in: path, required: true, schema: {type: string}}], responses: {'200': {description: Branches}}}
+  /api/v1/jobs/{jobId}:
+    parameters: [{name: jobId, in: path, required: true, schema: {type: string}}]
+    get: {summary: Get publication job, responses: {'200': {description: Job status, content: {application/json: {schema: {$ref: '#/components/schemas/Job'}}}}}}
+  /api/v1/data/export:
+    get:
+      summary: Export the complete instance data archive
+      description: Returns an .airipress ZIP containing logical records for the eight business tables and all registered file objects. The archive excludes config, the root SECRET, and .build.
+      responses:
+        '200': {description: Instance-level .airipress ZIP archive, content: {application/zip: {schema: {type: string, format: binary}}}}
+  /api/v1/data/import:
+    post:
+      summary: Overwrite the instance with an imported data archive
+      description: Replaces the current instance data. File content is authoritative on import; SHA-256, size, and object_key are recomputed, and identical content remains deduplicated. Model credential ciphertext requires the same root SECRET as the exporting instance.
+      requestBody: {required: true, content: {multipart/form-data: {schema: {type: object, required: [file], properties: {file: {type: string, format: binary, description: .airipress or ZIP archive}}}}}}
+      responses:
+        '200': {description: Import result, content: {application/json: {schema: {$ref: '#/components/schemas/ImportResult'}}}}
+        '400': {description: Invalid archive}
+components:
+  parameters:
+    RequestMarker: {name: X-Airipress-Request, in: header, required: true, schema: {type: string, enum: ['1']}, description: Required on state-changing requests together with an allowed Origin}
+  securitySchemes:
+    sessionCookie: {type: apiKey, in: cookie, name: airipress_session, description: HttpOnly SameSite Strict signed session cookie}
+  schemas:
+    LoginInput: {type: object, required: [username, password], properties: {username: {type: string}, password: {type: string, format: password, writeOnly: true}}}
+    Session: {type: object, required: [username], properties: {username: {type: string}}}
+    Workspace: {type: object, required: [id, name], properties: {id: {type: string}, name: {type: string}, root_path: {type: string}, created_at: {type: string, format: date-time}, updated_at: {type: string, format: date-time}}}
+    WorkspaceInput: {type: object, required: [name], properties: {name: {type: string}, root_path: {type: string}}}
+    WorkspacePatch: {type: object, properties: {name: {type: string}, root_path: {type: string}}}
+    Model: {type: object, required: [id, provider, name, model], properties: {id: {type: string}, provider: {type: string}, name: {type: string}, model: {type: string}, base_url: {type: string}, has_api_key: {type: boolean}}}
+    ModelInput: {type: object, required: [name, provider, model], properties: {provider: {type: string, enum: [openai, deepseek, gemini]}, name: {type: string}, model: {type: string}, api_key: {type: string, writeOnly: true}, base_url: {type: string}}}
+    ModelPatch: {type: object, properties: {provider: {type: string, enum: [openai, deepseek, gemini]}, name: {type: string}, model: {type: string}, api_key: {type: string, writeOnly: true}, base_url: {type: string}}}
+    ModelDiscoveryInput: {type: object, required: [provider], properties: {provider: {type: string, enum: [openai, deepseek, gemini]}, api_key: {type: string, writeOnly: true}, base_url: {type: string}, model_id: {type: string, description: Existing model config whose encrypted key should be reused}}}
+    DiscoveredModel: {type: object, required: [id, name], properties: {id: {type: string}, name: {type: string}}}
+    Asset: {type: object, required: [id, name, sha256, mime, size, kind, source_count], properties: {id: {type: string}, name: {type: string}, sha256: {type: string}, mime: {type: string}, size: {type: integer, format: int64}, kind: {type: string}, source_count: {type: integer, description: Number of workspace source references}, created_at: {type: string, format: date-time}}}
+    Source: {type: object, required: [id, name], properties: {id: {type: string}, name: {type: string}, kind: {type: string}, mime: {type: string}, sha256: {type: string}, file_id: {type: string}, relative_path: {type: string}, source_type: {type: string}, size: {type: integer, format: int64}}}
+    SourceReferenceInput: {type: object, required: [file_id, relative_path], properties: {file_id: {type: string}, relative_path: {type: string}}}
+    Message: {type: object, required: [role, content], properties: {id: {type: string}, role: {type: string, enum: [user, assistant, system]}, content: {type: string}, created_at: {type: string, format: date-time}}}
+    MessageInput: {type: object, required: [model_id, content], properties: {model_id: {type: string}, content: {type: string}}}
+    Chat: {type: object, required: [id, workspace_id, title, created_at], properties: {id: {type: string}, workspace_id: {type: string}, title: {type: string}, created_at: {type: string, format: date-time}}}
+    ChatInput: {type: object, properties: {title: {type: string}}}
+    ChatBranchInput: {type: object, required: [message_id], properties: {message_id: {type: string}}}
+    SiteTheme: {type: object, required: [id, name, engine, installed], properties: {id: {type: string}, name: {type: string}, engine: {type: string, enum: [astro, hugo]}, repository: {type: string}, ref: {type: string}, preview_url: {type: string, format: uri}, description: {type: string}, installed: {type: boolean}, commit: {type: string}}}
+    ThemeImportInput: {type: object, required: [git_url], properties: {git_url: {type: string, format: uri, example: https://github.com/owner/repository.git}, ref: {type: string}, name: {type: string}, preview_url: {type: string, format: uri}, description: {type: string}}}
+    Mindmap: {type: object, required: [root], properties: {root: {type: object, additionalProperties: true}}, description: Structured tree with text and children fields}
+    PublishInput: {type: object, required: [owner, repo], properties: {theme: {type: string, enum: [astro-default]}, target: {type: string, enum: [github-pages]}, owner: {type: string}, repo: {type: string}, branch: {type: string, default: gh-pages}, token: {type: string, writeOnly: true, description: Optional development fallback when no OAuth account is connected}}}
+    GitHubRepo: {type: object, required: [name, owner, default_branch], properties: {name: {type: string}, full_name: {type: string}, owner: {type: string}, private: {type: boolean}, default_branch: {type: string}, html_url: {type: string, format: uri}}}
+    GitHubRepoInput: {type: object, required: [name], properties: {owner: {type: string, description: Optional; when present must match the connected GitHub login}, name: {type: string}, description: {type: string}, private: {type: boolean}, auto_init: {type: boolean}}}
+    ImportResult: {type: object, required: [imported], properties: {imported: {type: integer, description: Number of logical records imported}}}
+    Job: {type: object, required: [id, status], properties: {id: {type: string}, status: {type: string, enum: [queued, running, succeeded, failed]}, url: {type: string, format: uri}, error: {type: string}}}

@@ -1,0 +1,88 @@
+services:
+  web:
+    image: ${AIRIPRESS_WEB_IMAGE:-ghcr.io/${AIRIPRESS_IMAGE_OWNER:-mo2iairi}/airipress-web:${AIRIPRESS_VERSION:-latest}}
+    restart: unless-stopped
+    ports:
+      - "${AIRIPRESS_BIND_ADDRESS:-127.0.0.1}:${AIRIPRESS_WEB_PORT:-3000}:3000"
+    depends_on:
+      server:
+        condition: service_healthy
+
+  server:
+    image: ${AIRIPRESS_SERVER_IMAGE:-ghcr.io/${AIRIPRESS_IMAGE_OWNER:-mo2iairi}/airipress-server:${AIRIPRESS_VERSION:-latest}}
+    restart: unless-stopped
+    environment:
+      ADDR: :8787
+      AIRIPRESS_CONFIG_FILE: /etc/airipress/config.yaml
+      AIRIPRESS_SECRET_FILE: /run/secrets/airipress_secret
+      AIRIPRESS_DATA_ROOT: /data
+      AIRIPRESS_SYNC_ROOT: /imports
+      AIRIPRESS_PYTHON_BIN: ${AIRIPRESS_PYTHON_BIN:-python3}
+      AIRIPRESS_TOOLS_DIR: /opt/airipress/tools
+      NO_PROXY: localhost,127.0.0.1,server
+      no_proxy: localhost,127.0.0.1,server
+      DATABASE_URL: ${AIRIPRESS_DATABASE_URL:-file:/data/.meta/airipress.db?cache=shared}
+      AIRIPRESS_S3_ENDPOINT: ${AIRIPRESS_S3_ENDPOINT:-}
+      AIRIPRESS_S3_BUCKET: ${AIRIPRESS_S3_BUCKET:-}
+      AIRIPRESS_S3_REGION: ${AIRIPRESS_S3_REGION:-auto}
+      AIRIPRESS_S3_ACCESS_KEY: ${AIRIPRESS_S3_ACCESS_KEY:-}
+      AIRIPRESS_S3_SECRET_KEY: ${AIRIPRESS_S3_SECRET_KEY:-}
+    volumes:
+      - "${AIRIPRESS_DATA_DIR:-./data}:/data"
+      - "${AIRIPRESS_IMPORT_DIR:-./imports}:/imports:ro"
+      - "${AIRIPRESS_CONFIG_FILE:-./config/config.yaml}:/etc/airipress/config.yaml:ro"
+    secrets:
+      - airipress_secret
+    healthcheck:
+      test: ["CMD", "wget", "-Y", "off", "-qO-", "http://127.0.0.1:8787/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 10s
+
+  postgres:
+    image: postgres:16-alpine
+    profiles: [postgres]
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${AIRIPRESS_POSTGRES_DB:-airipress}
+      POSTGRES_USER: ${AIRIPRESS_POSTGRES_USER:-airipress}
+      POSTGRES_PASSWORD: ${AIRIPRESS_POSTGRES_PASSWORD:-change-this-before-enabling-postgres}
+    volumes:
+      - airipress-postgres:/var/lib/postgresql/data
+
+  minio:
+    image: minio/minio:RELEASE.2024-06-13T22-53-53Z
+    profiles: [minio]
+    restart: unless-stopped
+    command: server /data --console-address :9001
+    environment:
+      MINIO_ROOT_USER: ${AIRIPRESS_S3_ACCESS_KEY:-airipress}
+      MINIO_ROOT_PASSWORD: ${AIRIPRESS_S3_SECRET_KEY:-change-this-before-enabling-minio}
+    volumes:
+      - airipress-minio:/data
+    ports:
+      - "${AIRIPRESS_BIND_ADDRESS:-127.0.0.1}:${AIRIPRESS_MINIO_PORT:-9001}:9001"
+
+  minio-init:
+    image: minio/mc:RELEASE.2024-06-12T14-34-03Z
+    profiles: [minio]
+    depends_on:
+      - minio
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        until mc alias set local http://minio:9000 "$${MINIO_USER}" "$${MINIO_PASSWORD}"; do sleep 1; done;
+        mc mb --ignore-existing "local/$${MINIO_BUCKET}"
+    environment:
+      MINIO_USER: ${AIRIPRESS_S3_ACCESS_KEY:-airipress}
+      MINIO_PASSWORD: ${AIRIPRESS_S3_SECRET_KEY:-change-this-before-enabling-minio}
+      MINIO_BUCKET: ${AIRIPRESS_S3_BUCKET:-airipress}
+
+volumes:
+  airipress-postgres:
+  airipress-minio:
+
+secrets:
+  airipress_secret:
+    file: "${AIRIPRESS_SECRET_FILE:-./config/secrets/airipress_secret}"

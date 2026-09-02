@@ -1,0 +1,11 @@
+services:
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    image: airipress-web:local
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: airipress-server:local

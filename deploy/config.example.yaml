@@ -1,0 +1,16 @@
+version: 1
+auth:
+  admin:
+    username: 'admin'
+    password_hash: '$2b$12$replace-with-a-bcrypt-hash'
+  session:
+    ttl: 24h
+    cookie_secure: false
+server:
+  allowed_origins:
+    - 'http://localhost:3000'
+    - 'http://127.0.0.1:3000'
+github:
+  client_id: ''
+  client_secret: ''
+  redirect_url: 'http://127.0.0.1:3000/api/v1/github/callback'

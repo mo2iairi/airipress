@@ -1,0 +1,14 @@
+[project]
+name = "airipress-tools"
+version = "0.1.0"
+description = "Offline tools for airipress"
+requires-python = ">=3.10"
+
+[project.optional-dependencies]
+image = ["Pillow>=10,<13"]
+
+[project.scripts]
+airipress-tools = "tools.__main__:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tools/tests"]

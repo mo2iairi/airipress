@@ -1,0 +1,26 @@
+version: 1
+auth:
+  admin:
+    username: 'admin'
+    password_hash: '$2b$12$replace-with-a-bcrypt-hash'
+  session:
+    ttl: 24h
+    cookie_secure: false
+server:
+  allowed_origins:
+    - 'http://localhost:3000'
+    - 'http://127.0.0.1:3000'
+github:
+  # Create an OAuth App at https://github.com/settings/developers
+  client_id: ''
+  client_secret: ''
+  redirect_url: 'http://127.0.0.1:3000/api/v1/github/callback'
+# 受信任的 GitHub 主题目录。主题必须包含 airipress.theme.json，安装后固定在 data/.build/themes。
+# themes:
+#   - id: 'my-astro-theme'
+#     name: 'My Astro Theme'
+#     engine: 'astro'
+#     repository: 'owner/repository'
+#     ref: 'release-tag'
+#     preview_url: 'https://example.com/'
+#     description: '已审查的 Astro 主题'
