@@ -3,13 +3,10 @@ name: Build and publish container images
 on:
   workflow_dispatch:
   push:
-    branches:
-      - master
-    tags:
-      - 'v*'
+    branches: [master]
+    tags: ['v*']
   pull_request:
-    branches:
-      - master
+    branches: [master]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -20,8 +17,8 @@ permissions:
 
 jobs:
   build:
-    name: Build ${{ matrix.image }} image
-    runs-on: ubuntu-latest
+    name: Build ${{ matrix.image }} (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
       packages: write
@@ -35,21 +32,100 @@ jobs:
             repository: airipress-server
             context: .
             file: ./Dockerfile
+            arch: amd64
+            platform: linux/amd64
+            runner: ubuntu-latest
+          - image: server
+            repository: airipress-server
+            context: .
+            file: ./Dockerfile
+            arch: arm64
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
           - image: web
             repository: airipress-web
             context: ./web
             file: ./web/Dockerfile
+            arch: amd64
+            platform: linux/amd64
+            runner: ubuntu-latest
+          - image: web
+            repository: airipress-web
+            context: ./web
+            file: ./web/Dockerfile
+            arch: arm64
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
 
     steps:
       - name: Check out source
         uses: actions/checkout@v4
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/${{ matrix.repository }}
+          flavor: |
+            suffix=-${{ matrix.arch }}
+          tags: |
+            type=ref,event=tag
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha
+            type=raw,value=master,enable=${{ github.ref == 'refs/heads/master' }}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/master' }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish architecture image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
+          platforms: ${{ matrix.platform }}
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.image }}-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}-${{ matrix.arch }}
+
+      - name: Attest published architecture image
+        if: github.event_name != 'pull_request' && github.event.repository.visibility == 'public'
+        uses: actions/attest@v4
+        with:
+          subject-name: ghcr.io/${{ github.repository_owner }}/${{ matrix.repository }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+  merge:
+    name: Publish multi-architecture manifests
+    needs: build
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - repository: airipress-server
+          - repository: airipress-web
+    steps:
       - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -63,34 +139,26 @@ jobs:
             type=sha
             type=raw,value=master,enable=${{ github.ref == 'refs/heads/master' }}
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/master' }}
-          labels: |
-            org.opencontainers.image.source=https://github.com/${{ github.repository }}
 
       - name: Log in to GitHub Container Registry
-        if: github.event_name != 'pull_request' && github.event.repository.visibility == 'public'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and publish image
-        id: build
-        uses: docker/build-push-action@v6
-        with:
-          context: ${{ matrix.context }}
-          file: ${{ matrix.file }}
-          platforms: linux/amd64,linux/arm64
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=${{ matrix.image }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      - name: Attest published image
-        if: github.event_name != 'pull_request'
-        uses: actions/attest@v4
-        with:
-          subject-name: ghcr.io/${{ github.repository_owner }}/${{ matrix.repository }}
-          subject-digest: ${{ steps.build.outputs.digest }}
-          push-to-registry: true
+      - name: Create multi-architecture manifests
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          targets=()
+          sources=()
+          while IFS= read -r tag; do
+            [ -n "$tag" ] || continue
+            targets+=(--tag "$tag")
+            sources+=("$tag-amd64" "$tag-arm64")
+          done <<< "$TAGS"
+          docker buildx imagetools create "${targets[@]}" "${sources[@]}"
