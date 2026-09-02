@@ -20,8 +20,13 @@ while (($#)); do
 done
 [[ "$release_version" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "Invalid version" >&2; exit 1; }
 
-script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || true)
-repo_root=$(cd -- "$script_dir/.." 2>/dev/null && pwd || true)
+script_path=${BASH_SOURCE[0]-}
+script_dir=
+repo_root=
+if [[ -n "$script_path" ]]; then
+  script_dir=$(cd -- "$(dirname -- "$script_path")" 2>/dev/null && pwd || true)
+  repo_root=$(cd -- "$script_dir/.." 2>/dev/null && pwd || true)
+fi
 if [[ -z "$project" ]]; then
   if [[ -f "$repo_root/compose.yaml" && -f "$repo_root/config/config.example.yaml" ]]; then
     project=$repo_root
@@ -51,7 +56,7 @@ deployment_env=$project/.env
 if [[ -n ${AIRIPRESS_DOWNLOAD_REF:-} ]]; then
   download_ref=$AIRIPRESS_DOWNLOAD_REF
 elif [[ "$release_version" == latest ]]; then
-  download_ref=main
+  download_ref=master
 else
   download_ref=$release_version
   [[ "$download_ref" =~ ^[0-9] ]] && download_ref="v$download_ref"
@@ -65,7 +70,12 @@ download_if_missing() {
   mkdir -p -- "$(dirname -- "$target")"
   temporary=$target.download.$$
   trap 'rm -f -- "$compose.download.$$" "$example.download.$$"' EXIT
-  curl -fsSL "$download_base/$relative" -o "$temporary"
+  if ! curl -fsSL "$download_base/$relative" -o "$temporary"; then
+    rm -f -- "$temporary"
+    echo "Unable to download $relative from $download_base." >&2
+    echo "The one-line installer requires a public GitHub repository and branch. For a private repository, clone it with authenticated Git access and run deploy/install.sh from that checkout instead." >&2
+    exit 1
+  fi
   [[ -s "$temporary" ]] || { echo "Downloaded $relative is empty" >&2; exit 1; }
   mv -- "$temporary" "$target"
 }

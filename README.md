@@ -22,8 +22,10 @@ airipress 是一个面向个人与小团队的知识工作台：把工作区文�
 需要 Docker 24+ 与 Compose v2。Linux 云服务器可直接运行：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/mo2iairi/airipress/main/deploy/install.sh | bash -s -- ./airipress
+curl -fsSL https://raw.githubusercontent.com/mo2iairi/airipress/master/deploy/install.sh | bash -s -- ./airipress
 ```
+
+该一行安装方式要求 GitHub 仓库及 `master` 分支可公开读取；私有仓库会被 GitHub 的 raw 地址以 404 隐藏。私有部署请先通过 SSH 或 GitHub CLI 克隆仓库，再从检出目录运行 `./deploy/install.sh`。
 
 安装器只在缺失时下载根目录 `compose.yaml` 和 `config/config.example.yaml`。首次安装会询问公开 Web 端口、`SECRET` 和管理员账密；留空会安全生成随机值，并自动执行 `docker compose up -d`。已有 `config/config.yaml` 时不会覆盖它，但必须同时保留 `config/secrets/airipress_secret`。生成的管理员密码只显示一次，请立即保存。`--dry-run` 只显示计划，不下载、不创建文件，也不启动容器。
 
@@ -68,4 +70,4 @@ docker compose -f compose.yaml --profile postgres --profile minio up -d
 
 ## 镜像发布
 
-`.github/workflows/container-images.yml` 在提交到 `main` 时构建并推送两个 GHCR 镜像的 `main`、提交 SHA 和 `latest`（默认分支）标签；推送 `v*` 标签时同时发布语义化版本标签和构建来源证明。Pull Request 只构建验证，不推送镜像。镜像名默认是 `ghcr.io/mo2iairi/*`；fork 发布时在目标实例的根 `.env` 设置 `AIRIPRESS_IMAGE_OWNER=<你的 GitHub 用户或组织>`。公开安装要求容器包随公开仓库保持公开可拉取。
+`.github/workflows/container-images.yml` 在提交到 `master` 时构建并推送两个 GHCR 镜像的 `master`、提交 SHA 和 `latest`（默认分支）标签；推送 `v*` 标签时同时发布语义化版本标签和构建来源证明。Pull Request 只构建验证，不推送镜像。镜像名默认是 `ghcr.io/mo2iairi/*`；fork 发布时在目标实例的根 `.env` 设置 `AIRIPRESS_IMAGE_OWNER=<你的 GitHub 用户或组织>`。公开安装要求容器包随公开仓库保持公开可拉取。

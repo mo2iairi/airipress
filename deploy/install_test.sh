@@ -46,6 +46,10 @@ dry_target=$case_root/dry-run
 "$repo/deploy/install.sh" --dry-run "$dry_target" </dev/null >/dev/null
 [[ ! -e "$dry_target" ]]
 
+stdin_target=$case_root/stdin-dry-run
+cat "$repo/deploy/install.sh" | bash -s -- --dry-run "$stdin_target" >/dev/null
+[[ ! -e "$stdin_target" ]]
+
 grep -q 'pull ghcr.io/mo2iairi/airipress-server:latest' "$DOCKER_LOG"
 
 automatic_target=$case_root/automatic
